@@ -1,76 +1,62 @@
 <?php
 
-//function to check connection
-function checkConnection($database, $username, $password)
-{
-    $serverName = "mssql";
-
-    $connectionOptions = array(
-        "Database" => $database,
-        "Uid" => $username,
-        "PWD" => $password
-    );
-    $conn = sqlsrv_connect($serverName, $connectionOptions);
-
-    return $conn;
-}
-
 // Database connection function
 function dbConnect()
 {
-    $conn = checkConnection("phpappdb", "sa", "Welcome123!");
+    $host = "postgres"; // Postgres Docker service name
+    $db = "phpappdb";
+    $user = "pguser";
+    $pass = "Welcome123!";
+    $port = "5432";
 
-    //check database connection
-    if ($conn === false) {
-        //confirm that the database is not missing (if it is running for the first time)
-        $conn = checkConnection("master", "sa", "Welcome123!");
-
-        if ($conn === false) {
-            error_log(print_r(sqlsrv_errors(), true));
-            die("Database connection error.");
-        } else {
-            header("Location: config.php");
-        }
-
-        error_log(print_r(sqlsrv_errors(), true));
-        die("Database connection error.");
+    try {
+        // Make connection
+        $dsn = "pgsql:host=$host;port=$port;dbname=$db";
+        $conn = new PDO($dsn, $user, $pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+        ]);
+        return $conn;
+    } catch (PDOException $e) {
+        die("Database connection error: " . $e->getMessage());
     }
-    return $conn;
 }
 
 $conn = dbConnect();
+
+// Check if the users table exists
+$tableCheckQuery = "SELECT to_regclass('public.users') AS table_exists";
+$tableCheckStmt = $conn->query($tableCheckQuery);
+$tableExists = $tableCheckStmt->fetch(PDO::FETCH_ASSOC)['table_exists'];
+
+if (!$tableExists) {
+    die("The 'users' table does not exist. Please run the migration script to create it.");
+}
 
 if (isset($_POST['submit'])) {
     $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_SPECIAL_CHARS);
     $password = $_POST['password'];
 
     // Prepare and execute query with hashed password verification
-    $sql = "SELECT password FROM users WHERE username = ?";
-    $params = array($username);
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    $sql = "SELECT password FROM users WHERE username = :username";
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':username', $username, PDO::PARAM_STR);
+    $stmt->execute();
 
-    if ($stmt && $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-        if (password_verify($password, trim($row['password']))) {
-            // Password matches
-            session_start();
-            $_SESSION['username'] = $username;
-            header("Location: index.php");
-            exit();
-        } else {
-            echo "Invalid username or password.";
-        }
+    // Fetch the user record
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    //verify password
+    if ($row && password_verify($password, trim($row['password']))) {
+        // Password matches
+        session_start();
+        $_SESSION['username'] = $username;
+        header("Location: index.php");
+        exit();
     } else {
         echo "Invalid username or password.";
     }
-    var_dump($params, $stmt, sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC), password_verify($password, trim($row['password'])));
-    sqlsrv_free_stmt($stmt);
 }
-sqlsrv_close($conn);
-
 ?>
-
-
-
 
 
 <!doctype html>

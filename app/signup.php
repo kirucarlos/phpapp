@@ -2,20 +2,23 @@
 // Database connection function
 function dbConnect()
 {
-    $serverName = "mssql";
+    $host = "postgres"; // Postgres Docker service name
+    $db = "phpappdb";
+    $user = "pguser";
+    $pass = "Welcome123!";
+    $port = "5432";
 
-    $connectionOptions = array(
-        "Database" => "phpappdb",
-        "Uid" => "sa",
-        "PWD" => "Welcome123!"
-    );
-    $conn = sqlsrv_connect($serverName, $connectionOptions);
-
-    if ($conn === false) {
-        error_log(print_r(sqlsrv_errors(), true));
+    try {
+        // Make connection
+        $dsn = "pgsql:host=$host;port=$port;dbname=$db";
+        $conn = new PDO($dsn, $user, $pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+        ]);
+        return $conn;
+    } catch (PDOException $e) {
+        error_log($e->getMessage());
         die("Database connection error.");
     }
-    return $conn;
 }
 
 $conn = dbConnect();
@@ -33,16 +36,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     // Check if username already exists
-    $sql = "SELECT COUNT(*) AS user_count FROM users WHERE username = ?";
-    $params = array($username);
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    $sql = "SELECT COUNT(*) AS user_count FROM users WHERE username = :username";
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':username', $username, PDO::PARAM_STR);
+    $stmt->execute();
 
-    if ($stmt === false) {
-        error_log(print_r(sqlsrv_errors(), true));
-        die("Error checking username.");
-    }
-
-    $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($row['user_count'] > 0) {
         die("Username already exists. Please choose a different one.");
     }
@@ -51,24 +50,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
     // Insert new user into the database
-    $sql = "INSERT INTO users (username, names, password) VALUES (?, ?, ?)";
-    $params = array($username, $names, $hashedPassword);
-    $stmt = sqlsrv_query($conn, $sql, $params);
+    $sql = "INSERT INTO users (username, names, password) VALUES (:username, :names, :password)";
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':username', $username, PDO::PARAM_STR);
+    $stmt->bindParam(':names', $names, PDO::PARAM_STR);
+    $stmt->bindParam(':password', $hashedPassword, PDO::PARAM_STR);
 
-    if ($stmt === false) {
-        error_log(print_r(sqlsrv_errors(), true));
-        die(print_r(sqlsrv_errors(), true));
+    if ($stmt->execute()) {
+        header("Location: login.php");
+        exit;
+    } else {
+        error_log("Error inserting user.");
+        die("Error inserting user.");
     }
-
-    header("Location: login.php");
-    sqlsrv_free_stmt($stmt);
 }
-sqlsrv_close($conn);
-
 ?>
-
-
-
 
 
 <!doctype html>
@@ -100,7 +96,7 @@ sqlsrv_close($conn);
             </div>
             <div class="form-group">
                 <label for="name">Names</label>
-                <input type="text" class="form-control" id="name" name="name" placeholder="Enter your names">
+                <input type="text" class="form-control" id="name" name="name" placeholder="Enter your names" Required>
             </div>
             <div class="form-group">
                 <label for="password">Password</label>

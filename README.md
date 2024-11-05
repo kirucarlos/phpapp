@@ -1,4 +1,4 @@
-# PHP Login Application (PHP - MSSQL)
+# PHP Login Application (PHP - Postgres)
 
 A simple PHP application with user authentication features, including login, sign-up, and logout. This application runs in a Docker environment for easy setup and deployment.
 
@@ -41,7 +41,7 @@ A simple PHP application with user authentication features, including login, sig
    ```
 
 4. **Access the Application**:
-   The application should now be running at `http://localhost/app` (or whichever port you configured in the Docker setup).
+   The application should now be running at `http://localhost/` (or whichever port you configured in the Docker setup).
 
 ## Usage
 
